@@ -12,13 +12,14 @@ contract WorldIDRaffle {
     error InvalidNullifier();
 
     event CreatedRaffle(uint256 raffleId, address indexed creator);
+    event EndedRaffle(uint256 indexed raffleId, address[] winners);
     event JoinedRaffle(uint256 indexed raffleId, address indexed participant);
-    event EndedRaffle(uint256 indexed raffleId, address indexed winner);
 
     struct Raffle {
         uint256 seed;
         uint256 endsAt;
-        address winner;
+        address[] winners;
+        uint256 noOfWinners;
         uint256 participantCount;
     }
 
@@ -36,8 +37,9 @@ contract WorldIDRaffle {
         actionId = _actionId;
     }
 
-    function create(uint256 endsAt) public {
+    function create(uint256 endsAt, uint256 noOfWinners) public {
         getRaffle[nextRaffleId].endsAt = endsAt;
+        getRaffle[nextRaffleId].noOfWinners = noOfWinners;
 
         emit CreatedRaffle(nextRaffleId++, msg.sender);
     }
@@ -71,13 +73,18 @@ contract WorldIDRaffle {
     }
 
     function settle(uint256 raffleId) public {
-        if (getRaffle[raffleId].endsAt > block.timestamp)
-            revert RaffleRunning();
+        Raffle storage raffle = getRaffle[raffleId];
 
-        getRaffle[raffleId].winner = getParticipant[raffleId][
-            getRaffle[raffleId].seed % getRaffle[raffleId].participantCount
-        ];
+        if (raffle.endsAt > block.timestamp) revert RaffleRunning();
 
-        emit EndedRaffle(raffleId, getRaffle[raffleId].winner);
+        for (uint256 i = 0; i < raffle.noOfWinners; i++) {
+            raffle.winners.push(
+                getParticipant[raffleId][raffle.seed % raffle.participantCount]
+            );
+
+            raffle.seed ^= uint256(keccak256(abi.encodePacked(raffle.seed, i)));
+        }
+
+        emit EndedRaffle(raffleId, getRaffle[raffleId].winners);
     }
 }
